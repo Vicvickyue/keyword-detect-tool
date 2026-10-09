@@ -13,4 +13,5 @@ tmp/
 vendor/7zip/7z.exe
 vendor/7zip/7z.dll
 *.zip
+!downloads/KeywordReportTool-Windows-x64.zip
 *.egg-info/
