@@ -23,7 +23,8 @@ def run(package, output):
         raise RuntimeError(f"Packaged CLI failed: {result.returncode}")
     report = sorted(output.glob("*.pdf"))[-1]
     records = [json.loads(line) for line in report.with_suffix(".jsonl").read_text(encoding="utf-8").splitlines()]
-    assert records[0]["summary"] == {"files": 11, "total": 35, "matched": 5, "incomplete": 0, "archives": 5}
+    assert records[0]["summary"] == {"files": 12, "total": 41, "matched": 6, "incomplete": 0, "archives": 5}
+    assert any(r["type"] == "file" and r["kind"] == "sqlite" and r["total"] == 6 for r in records)
     gui_env = dict(env, QT_QPA_PLATFORM="offscreen")
     process = subprocess.Popen([str(executable)], env=gui_env)
     try:
@@ -33,7 +34,7 @@ def run(package, output):
         if process.poll() is None:
             process.terminate()
         process.wait(timeout=10)
-    print("Packaged CLI and GUI startup passed; total matches: 35")
+    print("Packaged CLI and GUI startup passed; total matches: 41 (SQLite: 6)")
     print(report)
 
 

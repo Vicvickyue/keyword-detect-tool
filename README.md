@@ -6,7 +6,7 @@ Windows 本地离线工具：检索文本、表格和多层压缩包，输出带
 
 **[下载 KeywordReportTool-Windows-x64.zip（约 58 MiB）](https://github.com/Vicvickyue/keyword-detect-tool/raw/refs/heads/main/downloads/KeywordReportTool-Windows-x64.zip)**
 
-已编译的 v1.0.0 便携包包含 EXE、运行依赖、三个 Excel 词库模板、示例和使用说明。完整解压后双击 `KeywordReportTool.exe`；不需要运行源码或构建脚本。请勿单独移动 EXE，必须保留同目录的 `_internal` 文件夹。
+已编译的 v1.1.0 便携包包含 EXE、运行依赖、三个 Excel 词库模板、示例和使用说明，新增 SQLite `.db3` 检索。完整解压后双击 `KeywordReportTool.exe`；不需要运行源码或构建脚本。请勿单独移动 EXE，必须保留同目录的 `_internal` 文件夹。
 
 如果直接下载链接未打开，可进入 [下载目录](downloads/README.md)，点击 ZIP 文件，再选择 GitHub 的 **Download raw file**。私有仓库需要先登录有权限的 GitHub 账号。[SHA-256 校验文件](downloads/KeywordReportTool-Windows-x64.zip.sha256)
 
@@ -62,6 +62,7 @@ A1 为表头，A2 起每行一个 ID。去除首尾空格、忽略空行、合�
 | CSV / TSV / CXV | 自动识别逗号、Tab、分号、竖线；支持引号和单元格内换行；记录号不是物理文本行号 |
 | XLSX / XLSM | 全部工作表（含隐藏）、隐藏行列；记录工作表及坐标，不执行宏 |
 | XLS / XLSB / ODS | 由 calamine 读取单元格值及坐标 |
+| DB3 / DB / SQLITE / SQLITE3 | 标准 SQLite 3 普通表，扫描文本及数值字段，记录表名、rowid/主键和字段名 |
 | ZIP / 7Z / RAR / TAR / GZ / BZ2 / XZ | 由便携包中的 7-Zip 逐成员读取，支持混合嵌套 |
 | .filepart / 错误后缀 | 优先识别文件头；完整的已支持格式可读取，不完整、损坏、私有二进制会标注失败/不支持 |
 
@@ -77,6 +78,21 @@ XLS/XLSB/ODS 不逐项验证公式缓存，报告附带说明。数字日期按�
 `.cxv` 暂按分隔文本尝试读取，无法解析时标明失败。`.filepart` 是后缀而非压缩标准；仅内容可读不等于传输完整，软件无法证明普通文本传输已经结束。
 
 ## 压缩、分卷与限制
+
+### SQLite / DB3 说明
+
+`.db3` 优先按标准 SQLite 3 解析，也按文件头识别改名的数据库。扫描普通数据表的字段值，不扫描表名、字段名或系统表；视图不重复扫描底层记录。
+同一数据库的全部表共享“同一规则、同一 ID 最多 5 处明细”的限额，全部命中继续计数。
+字段顺序作为相邻列顺序，保存命中字段与左一列、右一列；字段名作为表头，不应用界面的 Excel/CSV 表头行设置。
+PDF/JSONL 显示表名、字段名、rowid；WITHOUT ROWID 表使用主键，无可用键时显示扫描记录序号。
+
+源文件仅复制，不直接连接或更改；在临时副本上进行只读查询与完整性检查。请使用已停止写入或已导出的单文件数据库。
+检测到非空 `-wal` 或 `-journal` 时停止该数据库检索并提示导出完整单文件；压缩包内的相同情况也会标注，避免漏读事务日志中的数据。
+仅复制主文件、遗漏 WAL 的不完整导出无法总是事后识别，请用原程序的完整备份/导出功能。
+加密（例如 SQLCipher）、非 SQLite 私有 DB3、损坏文件明确标记失败；不尝试解密。
+二进制 BLOB 字段、虚拟表及其内部表不进行文本猜测，报告标记部分完成并说明跳过范围；普通文本/数值字段仍继续检索。包含自定义函数或超大字段而无法读取的表也会明确标记。
+
+### 压缩处理
 
 默认最大深度 10（可设为 5–30），每个压缩或归档容器算一层；`.tar.gz` 算两层。
 XLSX/ODS 的内部 ZIP 容器不算业务压缩层，也不会重复搜索其内部 XML。

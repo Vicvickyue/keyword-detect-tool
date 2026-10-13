@@ -7,6 +7,7 @@ from threading import Event
 
 from . import __version__
 from .archives import ArchiveReader
+from .database import database_records
 from .models import Cancelled, LimitExceeded
 from .readers import detect, text_records, csv_records, excel_records, check_workbook_zip
 from .rules import Matcher
@@ -128,6 +129,8 @@ class Scanner:
             warnings = []
             if kind == "csv":
                 records = csv_records(path, name, self.config.header_row, self.check)
+            elif kind == "sqlite":
+                records = database_records(path, self.check, warnings)
             elif kind in {"xlsx", "xlsm", "xls", "xlsb", "ods"}:
                 check_workbook_zip(path, self.config.max_expanded_bytes, self.config.max_files)
                 records = excel_records(path, kind, self.config.header_row, self.check, warnings)
@@ -139,7 +142,7 @@ class Scanner:
                 if matches:
                     self.store.record(ident, matches, payload)
             # XLS/ODS cache caveat is informational, XLSX missing caches are incomplete.
-            incomplete = any("无缓存" in note for note in warnings)
+            incomplete = any("无缓存" in note or "未检索" in note for note in warnings)
             self.store.finish(ident, "部分完成" if incomplete else "完成", "\n".join(warnings))
         except Cancelled as exc:
             self.store.finish(ident, "已取消", str(exc))
@@ -154,7 +157,9 @@ class Scanner:
     def archive(self, path, source, depth):
         with tempfile.TemporaryDirectory(prefix="lotfinder-") as directory:
             temp = Path(directory)
-            for index, (name, size, problem) in enumerate(self.reader.members(path, temp)):
+            members = self.reader.members(path, temp)
+            nonempty_members = {n for n, size, _ in members if size > 0}
+            for index, (name, size, problem) in enumerate(members):
                 self.check()
                 child_source = f"{source} → {name}"
                 if problem or size > self.config.max_file_bytes:
@@ -174,6 +179,11 @@ class Scanner:
                     self.error_entry(child_source, name, depth + 1, "失败", exc)
                     continue
                 try:
+                    if detect(target, name) == "sqlite" and any(
+                            name + suffix in nonempty_members for suffix in ("-wal", "-journal")):
+                        self.error_entry(child_source, name, depth + 1, "跳过",
+                                         "压缩包内数据库带有 WAL/事务日志，请先导出完整的单文件 SQLite 数据库。")
+                        continue
                     self.visit(target, child_source, name, depth + 1)
                 finally:
                     target.unlink(missing_ok=True)

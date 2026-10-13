@@ -22,6 +22,8 @@ def detect(path: Path, name: str):
     with path.open("rb") as stream:
         head = stream.read(8192)
     suffix = Path(name).suffix.lower()
+    if head.startswith(b"SQLite format 3\x00") or suffix in {".db3", ".sqlite", ".sqlite3", ".db"}:
+        return "sqlite"
     if head.startswith((b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")):
         try:
             with zipfile.ZipFile(path) as archive:

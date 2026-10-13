@@ -4,6 +4,7 @@ import gzip
 import io
 import tarfile
 import zipfile
+import sqlite3
 from pathlib import Path
 
 from openpyxl import Workbook
@@ -71,6 +72,11 @@ def create(root):
     (inputs / "五层压缩.filepart").write_bytes(data)
     (inputs / "无匹配.txt").write_text("这是没有关键词的文件。", encoding="utf-8")
     (inputs / "示例.xml").write_text('<record lot="AC000061">E0005X</record>', encoding="utf-8")
+    with sqlite3.connect(inputs / "设备数据库.db3") as db:
+        db.execute("CREATE TABLE IF NOT EXISTS sample_logs (lot TEXT, npw TEXT, foup TEXT, product TEXT, eqid TEXT, layer TEXT)")
+        db.execute("DELETE FROM sample_logs")
+        db.execute("INSERT INTO sample_logs VALUES (?,?,?,?,?,?)",
+                   ("AT0004.13", "AC000061", "APE10264", "E0005X", "AMHTSEM02", "ETCH_01"))
     return inputs, libraries
 
 

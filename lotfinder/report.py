@@ -215,8 +215,12 @@ def write_pdf(store, target):
                                      f"本行出现 {item['occurrences']} 次 · 编码 {item['encoding']}", "small")
                     report.paragraph(item["text"], highlight=hit["keyword"])
                 else:
-                    report.paragraph(f"明细 {index} · {item['sheet']} · {item['column']}{item['row']} · "
-                                     f"本单元格出现 {item['occurrences']} 次", "small")
+                    if item["type"] == "database":
+                        report.paragraph(f"明细 {index} · 数据表：{item['sheet']} · {item['locator']} · "
+                                         f"字段：{item['column']} · 本字段出现 {item['occurrences']} 次", "small")
+                    else:
+                        report.paragraph(f"明细 {index} · {item['sheet']} · {item['column']}{item['row']} · "
+                                         f"本单元格出现 {item['occurrences']} 次", "small")
                     for cell in item["cells"]:
                         report.ensure_space(40)
                         mark = "命中列" if cell["matched"] else "相邻列"
