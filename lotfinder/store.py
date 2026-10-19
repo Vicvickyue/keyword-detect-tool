@@ -74,3 +74,10 @@ class Store:
     def close(self):
         self.db.commit()
         self.db.close()
+
+    def report_summary(self):
+        return dict(self.db.execute("""SELECT
+            COALESCE(SUM(status='完成' AND kind!='archive'),0) AS completed_content,
+            COALESCE(SUM(status='完成' AND kind!='archive' AND total=0),0) AS unmatched,
+            COALESCE(SUM(kind='archive' OR status='已展开'),0) AS containers,
+            COALESCE(SUM(status='分卷附件'),0) AS volume_parts FROM files""").fetchone())

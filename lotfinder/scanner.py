@@ -44,7 +44,8 @@ class Scanner:
         self.store.meta("settings", {"case_sensitive": self.config.case_sensitive,
             "whole_id": self.config.whole_id, "header_row": self.config.header_row,
             "max_depth": self.config.max_depth, "max_file_bytes": self.config.max_file_bytes,
-            "max_expanded_bytes": self.config.max_expanded_bytes, "max_files": self.config.max_files})
+            "max_expanded_bytes": self.config.max_expanded_bytes, "max_files": self.config.max_files,
+            "include_full_file_list": self.config.include_full_file_list})
         state = "完成"
         try:
             for source in self.config.sources:
