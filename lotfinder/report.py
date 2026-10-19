@@ -217,6 +217,17 @@ def file_type(file):
     return f"{file['suffix'] or '无后缀'} / {file['kind']}"
 
 
+def document_directory(file):
+    """Display the containing directory while keeping archive ancestry intact."""
+    source, name = file["source"], file["name"]
+    member_suffix = " → " + name
+    if file["depth"] > 0 and source.endswith(member_suffix):
+        archive = source[:-len(member_suffix)]
+        directory = str(PureWindowsPath(name).parent)
+        return archive + " → " + ("（压缩包根目录）" if directory == "." else directory)
+    return str(PureWindowsPath(source).parent)
+
+
 def write_pdf(store, target):
     report = PDFWriter(target)
     meta, summary = store.metadata(), store.summary()
@@ -247,7 +258,7 @@ def result_rows(store):
     for file in store.files():
         status = file["status"]
         parsing = status + ("：" + file["error"] if file["error"] else "")
-        prefix = [file["source"], short_name(file), file_type(file), parsing]
+        prefix = [document_directory(file), short_name(file), file_type(file), parsing]
         hits = list(store.hits(file["id"]))
         if hits:
             for hit in hits:

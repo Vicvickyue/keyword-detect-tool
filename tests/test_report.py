@@ -156,7 +156,7 @@ def test_unified_table_columns_and_keyword_counts(tmp_path):
     rows = list(result_rows(store))
     assert len(rows) == 3
     assert sorted(row[-1] for row in rows) == ["1", "1", "2"]
-    assert all(len(row) == 6 and row[0] == str(source) and row[1] == source.name for row in rows)
+    assert all(len(row) == 6 and row[0] == str(source.parent) and row[1] == source.name for row in rows)
     pdf = tmp_path / "counts.pdf"
     write_pdf(store, pdf)
     text, _ = pdf_text(pdf)
