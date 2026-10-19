@@ -20,12 +20,13 @@ def main():
     parser.add_argument("--ignore-case", action="store_true")
     parser.add_argument("--contains", action="store_true")
     parser.add_argument("--depth", type=int, default=10)
-    parser.add_argument("--full-file-list", action="store_true", help="在 PDF 末尾附上完整文件清单")
+    parser.add_argument("--full-file-list", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--match-details", action="store_true", help="在 PDF 中输出匹配原文和上下文")
     args = parser.parse_args()
     config = ScanConfig(args.scan, args.output,
         dictionaries={k: v for k in ("product", "eqid", "layer") if (v := getattr(args, k))},
         case_sensitive=not args.ignore_case, whole_id=not args.contains, max_depth=args.depth,
-        include_full_file_list=args.full_file_list)
+        include_match_details=args.match_details)
     try:
         path, summary, state = execute(config)
         if sys.stdout:

@@ -130,7 +130,7 @@ def test_cancel_database_scan(tmp_path):
 
 def test_database_pdf_has_real_locator(tmp_path):
     path = make_db(tmp_path / "report.db3")
-    pdf, _, _ = execute(ScanConfig([path], tmp_path / "reports"))
+    pdf, _, _ = execute(ScanConfig([path], tmp_path / "reports", include_match_details=True))
     with pymupdf.open(pdf) as doc:
         text = "".join(p.get_text() for p in doc)
     assert "数据表：设备日志" in text

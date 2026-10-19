@@ -1,6 +1,6 @@
 # Windows 便携版下载
 
-版本：v1.2.0。支持 Windows 10/11 x64，支持 SQLite `.db3` 检索；默认精简 PDF，可勾选附上完整文件清单。
+版本：v1.3.0。支持 Windows 10/11 x64，支持 SQLite `.db3` 检索；默认输出六列完整结果表，可勾选输出匹配明细。
 
 **[点击下载 Windows 便携包](https://github.com/Vicvickyue/keyword-detect-tool/raw/refs/heads/main/downloads/KeywordReportTool-Windows-x64.zip)**
 

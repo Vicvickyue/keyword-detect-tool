@@ -45,7 +45,7 @@ class Scanner:
             "whole_id": self.config.whole_id, "header_row": self.config.header_row,
             "max_depth": self.config.max_depth, "max_file_bytes": self.config.max_file_bytes,
             "max_expanded_bytes": self.config.max_expanded_bytes, "max_files": self.config.max_files,
-            "include_full_file_list": self.config.include_full_file_list})
+            "include_match_details": self.config.include_match_details})
         state = "完成"
         try:
             for source in self.config.sources:

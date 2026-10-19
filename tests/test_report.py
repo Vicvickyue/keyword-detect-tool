@@ -36,7 +36,7 @@ def test_sequence_and_no_overwrite(tmp_path):
 def test_pdf_chinese_long_evidence_and_log(tmp_path):
     source = tmp_path / "日志.txt"
     source.write_text("中文日志 AT0004.13 <>&\n" + "超长内容" * 1500 + " APE10264 尾部标记", encoding="utf-8")
-    pdf, summary, state = execute(ScanConfig([source], tmp_path / "reports"))
+    pdf, summary, state = execute(ScanConfig([source], tmp_path / "reports", include_match_details=True))
     assert summary["total"] == 2
     assert state == "完成"
     with fitz.open(pdf) as doc:
@@ -53,24 +53,26 @@ def test_pdf_chinese_long_evidence_and_log(tmp_path):
     assert not list((tmp_path / "reports").glob("*.lock"))
 
 
-def test_compact_omits_clean_files_but_log_and_appendix_keep_all(tmp_path):
+def test_details_optional_and_complete_table_and_log(tmp_path):
     source = tmp_path / "source"
     source.mkdir()
     for index in range(80):
         (source / f"unmatched-{index:03d}.txt").write_text("nothing here")
-    (source / "matched.log").write_text("APE10264\n" * 9)
+    (source / "matched.log").write_text("APE10264 evidence-marker\n" * 9)
     compact, summary, _ = execute(ScanConfig([source], tmp_path / "compact"))
-    full, full_summary, _ = execute(ScanConfig([source], tmp_path / "full", include_full_file_list=True))
+    full, full_summary, _ = execute(ScanConfig([source], tmp_path / "full", include_match_details=True))
     compact_text, compact_pages = pdf_text(compact)
     full_text, full_pages = pdf_text(full)
     assert summary == full_summary
-    assert "unmatched-079.txt" not in compact_text
+    assert "unmatched-079.txt" in compact_text
     assert "unmatched-079.txt" in full_text
     assert "附录 / 完整文件清单" not in compact_text
-    assert "附录 / 完整文件清单" in full_text
+    assert "03 / 匹配明细" in full_text
+    assert "03 / 匹配明细" not in compact_text
+    assert "evidence-marker" not in compact_text
+    assert "evidence-marker" in full_text
     assert "无匹配文件 80" in compact_text
-    assert "F001" in compact_text
-    assert compact_pages <= 3 and full_pages > compact_pages
+    assert full_pages >= compact_pages
     logs = []
     for pdf in (compact, full):
         records = [json.loads(line) for line in pdf.with_suffix(".jsonl").read_text(encoding="utf-8").splitlines()]
@@ -93,11 +95,11 @@ def test_compact_keeps_archive_errors_and_partial_matches(tmp_path):
     text, _ = pdf_text(pdf)
     assert "bad.zip" in text and "部分完成" in text
     assert "测试：后续内容未检索" in text
-    assert text.count(matched["source"]) == 1
     assert "已完整扫描内容文件 0" in text
     assert "无匹配文件 0" in text
     assert "异常条目 2" in text
-    assert text.index("03 / 匹配明细") < text.index("04 / 异常文件")
+    assert "已观察" in text and "未能确定" in text
+    assert "04 / 异常文件" not in text
     store.close()
 
 
@@ -107,28 +109,28 @@ def test_no_hits_and_container_summary(tmp_path):
         z.writestr("hidden-clean.txt", "nothing")
     pdf, _, _ = execute(ScanConfig([source], tmp_path / "out"))
     text, pages = pdf_text(pdf)
-    assert "hidden-clean.txt" not in text
+    assert "hidden-clean.txt" in text
     assert "已完整扫描内容文件 1" in text
     assert "压缩容器 1，已展开 1" in text
-    assert "已扫描内容中无命中文件" in text
+    assert "未匹配" in text and "不适用" in text
     assert pages <= 2
 
 
 def test_table_paginates_long_paths_without_losing_tail(tmp_path):
     pdf = tmp_path / "long.pdf"
     writer = PDFWriter(pdf)
-    rows = [{"id": i, "source": ("路径/" * 1800 + "尾部标记") if i == 1 else f"source-{i}",
-             "name": "data.log", "suffix": ".log", "kind": "text", "status": "完成", "total": 1}
+    rows = [[("路径/" * 1800 + "尾部标记") if i == 1 else f"source-{i}",
+             f"data-{i}.log", ".log / text", "完成", "APE10264", "1"]
             for i in range(1, 75)]
-    writer.file_table(rows, full_paths=True)
+    writer.result_table(rows)
     writer.save()
     text, pages = pdf_text(pdf)
-    assert "尾部标记" in text and "F074" in text
+    assert "尾部标记" in text and "data-74.log" in text
     assert pages > 2
-    assert text.count("完整来源路径") >= pages
+    assert text.count("文档路径") >= pages
 
 
-def test_completed_format_notes_are_grouped(tmp_path):
+def test_completed_format_notes_stay_with_files(tmp_path):
     path = tmp_path / "clean.txt"
     path.write_text("nothing")
     store = Store(tmp_path / "result.sqlite3")
@@ -140,7 +142,24 @@ def test_completed_format_notes_are_grouped(tmp_path):
     pdf = tmp_path / "grouped.pdf"
     write_pdf(store, pdf)
     text, _ = pdf_text(pdf)
-    assert text.count(note) == 1
-    assert "适用于 2 个已完成文件" in text
-    assert "second.xls" not in text
+    assert text.count(note) == 2
+    assert "second.xls" in text
+    store.close()
+
+
+def test_unified_table_columns_and_keyword_counts(tmp_path):
+    from lotfinder.report import result_rows
+    source = tmp_path / "counts.txt"
+    source.write_text("APE10264 APE10264 AT0004.13 AT0004.14")
+    store = Store(tmp_path / "counts.sqlite3")
+    Scanner(ScanConfig([source], tmp_path / "out"), store).run()
+    rows = list(result_rows(store))
+    assert len(rows) == 3
+    assert sorted(row[-1] for row in rows) == ["1", "1", "2"]
+    assert all(len(row) == 6 and row[0] == str(source) and row[1] == source.name for row in rows)
+    pdf = tmp_path / "counts.pdf"
+    write_pdf(store, pdf)
+    text, _ = pdf_text(pdf)
+    for label in ["文档路径", "文档名", "文档类型", "解析情况", "关键词", "匹配次数"]:
+        assert label in text
     store.close()

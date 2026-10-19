@@ -9,7 +9,7 @@ from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
@@ -68,10 +68,10 @@ def safe_text(value):
 class PDFWriter:
     def __init__(self, path):
         self.font = chinese_font()
-        self.canvas = canvas.Canvas(str(path), pagesize=A4, pageCompression=1)
+        self.canvas = canvas.Canvas(str(path), pagesize=landscape(A4), pageCompression=1)
         self.canvas.setTitle("文件关键词检索报告")
         self.canvas.setAuthor("Keyword Report Tool")
-        self.width, self.height = A4
+        self.width, self.height = landscape(A4)
         self.left = 44
         self.usable = self.width - 88
         self.page = 0
@@ -157,10 +157,10 @@ class PDFWriter:
         self.footer()
         self.canvas.save()
 
-    def file_table(self, files, full_paths=False):
+    def result_table(self, rows):
         """Bound batches, repeat headers, and split unusually tall rows without truncation."""
-        headers = ["编号", "完整来源路径" if full_paths else "文件名", "类型", "状态", "总次数"]
-        widths = [45, self.usable - 220, 65, 65, 45]
+        headers = ["文档路径", "文档名", "文档类型", "解析情况", "关键词", "匹配次数"]
+        widths = [self.usable - 510, 115, 80, 140, 120, 55]
         batch = []
         def draw(rows):
             data = [[Paragraph(escape(safe_text(value)), self.styles["small"]) for value in row]
@@ -196,9 +196,8 @@ class PDFWriter:
                             raise ValueError("文件清单存在无法分页的内容。")
                         queue.insert(0, item)
                     self.new_page()
-        for file in files:
-            batch.append([file_label(file), file["source"] if full_paths else short_name(file),
-                          file_type(file), file["status"], str(file["total"])])
+        for row in rows:
+            batch.append(row)
             if len(batch) == 200:
                 draw(batch)
                 batch = []
@@ -231,30 +230,38 @@ def write_pdf(store, target):
     report.paragraph(f"压缩容器 {counts['containers']}，已展开 {summary['archives']}；"
                      f"分卷附件 {counts['volume_parts']}。异常条目可能包含已命中的文件或目录。", "small")
     report.paragraph(f"所有规则匹配总次数：{summary['total']}（同一位置命中不同规则时分别计数）")
-    for source in meta["sources"]:
-        report.paragraph(f"扫描来源：{source}", "small")
-    report.paragraph("启用规则：" + "、".join(RULE_NAMES[r] for r in meta["rules"]))
     settings = meta["settings"]
-    report.paragraph(f"大小写：{'区分' if settings['case_sensitive'] else '不区分'}；词库匹配："
-                     f"{'完整 ID' if settings['whole_id'] else '包含匹配'}；表头行：{settings['header_row']}；"
-                     f"最大压缩深度：{settings['max_depth']}。", "small")
-    report.paragraph("文本保存原始命中行；表格保存命中单元格、左一列、右一列及对应表头。"
-                     "同一位置重复出现计入总次数，但上下文明细只保存一份。", "small")
+    report.paragraph("启用规则：" + "、".join(RULE_NAMES[r] for r in meta["rules"]), "small")
     for warning in meta["warnings"]:
-        report.paragraph(warning)
-    for rule, info in meta["dictionaries"].items():
-        report.paragraph(f"{RULE_NAMES[rule]} 词库：{info['path']}；关键词 {info['count']} 个；"
-                         f"工作表 {info['sheet']}，A2 起。", "small")
-        report.paragraph(f"SHA-256：{info['sha256']}", "small")
-    full_list = settings.get("include_full_file_list", False)
-    report.paragraph("报告模式：精简正文" + ("，附完整文件清单。" if full_list else "，不附完整文件清单。") +
-                     "无匹配文件与正常压缩中间层默认不逐项列出，全部文件记录保留在同名 JSONL 日志中。", "small")
-    report.heading("02 / 命中文件速览")
-    if summary["matched"]:
-        report.file_table(file for file in store.files() if file["total"] > 0)
-    else:
-        report.paragraph("已扫描内容中无命中文件；是否存在未完成项请查看异常文件部分。")
-    report.paragraph("同名文件通过编号区分，完整来源见对应匹配明细。非“完成”状态的次数仅代表已观察到的匹配。", "small")
+        report.paragraph(warning, "small")
+    report.paragraph("表格包含全部已发现条目；每个文件的每个关键词单独计数。"
+                     "非完成状态的次数仅为已观察值，“—”表示无法确定或不适用。完整配置及明细见同名 JSONL。", "small")
+    report.heading("02 / 文件检索结果")
+    report.result_table(result_rows(store))
+    if settings.get("include_match_details", False):
+        write_details(report, store, summary)
+    report.save()
+
+
+def result_rows(store):
+    for file in store.files():
+        status = file["status"]
+        parsing = status + ("：" + file["error"] if file["error"] else "")
+        prefix = [file["source"], short_name(file), file_type(file), parsing]
+        hits = list(store.hits(file["id"]))
+        if hits:
+            for hit in hits:
+                count = str(hit["total"]) + ("（已观察）" if status != "完成" else "")
+                yield [*prefix, f"{RULE_NAMES[hit['rule']]}：{hit['keyword']}", count]
+        elif status == "完成":
+            yield [*prefix, "未匹配", "0"]
+        elif status in {"已展开", "分卷附件"}:
+            yield [*prefix, "不适用", "—"]
+        else:
+            yield [*prefix, "未能确定", "—"]
+
+
+def write_details(report, store, summary):
     report.heading("03 / 匹配明细")
     if not summary["total"]:
         report.paragraph("在已扫描的内容中未发现符合已启用规则的关键词。")
@@ -288,35 +295,6 @@ def write_pdf(store, target):
                         report.paragraph(f"{mark} {cell['column']} / 表头：{cell['header'] or '（无）'}", "small")
                         report.paragraph(cell["value"], highlight=hit["keyword"] if cell["matched"] else "")
             report.y -= 5
-    report.heading("04 / 异常文件与读取说明")
-    notes = 0
-    informational = {}
-    for file in store.files():
-        if file["status"] == "完成" and file["error"]:
-            informational[file["error"]] = informational.get(file["error"], 0) + 1
-            continue
-        if file["status"] in {"完成", "已展开", "分卷附件"} and not file["error"]:
-            continue
-        if file["status"] == "分卷附件":
-            continue
-        notes += 1
-        report.ensure_space(75)
-        report.paragraph(f"{file_label(file)} / {short_name(file)} / {file['status']}")
-        report.paragraph(f"类型：{file_type(file)}；已观察到的匹配次数：{file['total']}。", "small")
-        report.paragraph("来源见对应匹配明细。" if file["total"] else file["source"], "small")
-        report.paragraph(file["error"] or "该条目未完整扫描，无法据此判断无匹配。", "small")
-    for note, count in informational.items():
-        notes += 1
-        report.paragraph(f"读取说明（适用于 {count} 个已完成文件，具体对应见 JSONL）：{note}", "small")
-    if not notes:
-        report.paragraph("没有文件读取异常或额外说明。任务是否完整结束以首页任务状态为准。")
-    if full_list:
-        report.new_page()
-        report.heading("附录 / 完整文件清单")
-        report.paragraph("包含所有已发现的内容文件、压缩容器、分卷附件及异常条目。编号与正文、JSONL 的文件 ID 对应。"
-                         "状态为“完成”且总次数为 0 才表示完整扫描后无匹配；其他状态的 0 不代表无匹配。", "small")
-        report.file_table(store.files(), full_paths=True)
-    report.save()
 
 
 def write_log(store, target):

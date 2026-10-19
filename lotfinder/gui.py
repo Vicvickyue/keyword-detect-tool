@@ -119,9 +119,9 @@ class Window(QMainWindow):
         output_row.addWidget(self.output)
         self.output_button = self.button(output_row, "选择目录", self.choose_output)
         layout.addLayout(output_row)
-        self.full_file_list = QCheckBox("附上完整文件清单（默认精简报告；JSONL 始终保留全部记录）")
-        self.full_file_list.setChecked(self.settings.value("include_full_file_list", False, type=bool))
-        layout.addWidget(self.full_file_list)
+        self.match_details = QCheckBox("输出匹配明细（原文及上下文，默认不输出；JSONL 始终保留明细）")
+        self.match_details.setChecked(self.settings.value("include_match_details", False, type=bool))
+        layout.addWidget(self.match_details)
         actions = QHBoxLayout()
         self.start_button = self.button(actions, "开始检索", self.start)
         self.start_button.setObjectName("primary")
@@ -214,7 +214,7 @@ class Window(QMainWindow):
             header_row=self.header.value(), max_depth=self.depth.value(),
             max_file_bytes=self.file_size.value() * 1024**2,
             max_expanded_bytes=self.total_size.value() * 1024**2,
-            include_full_file_list=self.full_file_list.isChecked())
+            include_match_details=self.match_details.isChecked())
 
     def start(self):
         try:
@@ -238,7 +238,7 @@ class Window(QMainWindow):
     def save_settings(self, config):
         self.settings.setValue("sources", [str(p) for p in config.sources])
         self.settings.setValue("output", str(config.output))
-        self.settings.setValue("include_full_file_list", config.include_full_file_list)
+        self.settings.setValue("include_match_details", config.include_match_details)
         for key, edit in self.dictionary_edits.items():
             self.settings.setValue(key, edit.text())
         for key, check in self.rule_checks.items():
@@ -250,7 +250,7 @@ class Window(QMainWindow):
 
     def busy(self, busy):
         for widget in (self.input_group, self.config_group, self.advanced, self.output, self.output_button,
-                       self.start_button, self.full_file_list):
+                       self.start_button, self.match_details):
             widget.setEnabled(not busy)
         self.cancel_button.setEnabled(busy)
         self.open_pdf.setEnabled(not busy and bool(self.last_report))

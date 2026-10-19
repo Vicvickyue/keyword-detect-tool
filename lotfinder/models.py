@@ -28,7 +28,7 @@ class ScanConfig:
     max_files: int = 10000
     archive_timeout: int = 180
     seven_zip: str = ""
-    include_full_file_list: bool = False
+    include_match_details: bool = False
 
     def validate(self):
         if not self.sources or any(not p.exists() for p in self.sources):
