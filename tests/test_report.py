@@ -98,7 +98,7 @@ def test_compact_keeps_archive_errors_and_partial_matches(tmp_path):
     assert "已完整扫描内容文件 0" in text
     assert "无匹配文件 0" in text
     assert "异常条目 2" in text
-    assert "已观察" in text and "未能确定" in text
+    assert "已观察" in text and "NA" in text
     assert "04 / 异常文件" not in text
     store.close()
 
@@ -112,7 +112,7 @@ def test_no_hits_and_container_summary(tmp_path):
     assert "hidden-clean.txt" in text
     assert "已完整扫描内容文件 1" in text
     assert "压缩容器 1，已展开 1" in text
-    assert "未匹配" in text and "不适用" in text
+    assert "无" in text and "不适用" in text
     assert pages <= 2
 
 
@@ -130,7 +130,7 @@ def test_table_paginates_long_paths_without_losing_tail(tmp_path):
     assert text.count("文档路径") >= pages
 
 
-def test_completed_format_notes_stay_with_files(tmp_path):
+def test_completed_format_notes_hidden_in_pdf(tmp_path):
     path = tmp_path / "clean.txt"
     path.write_text("nothing")
     store = Store(tmp_path / "result.sqlite3")
@@ -142,7 +142,7 @@ def test_completed_format_notes_stay_with_files(tmp_path):
     pdf = tmp_path / "grouped.pdf"
     write_pdf(store, pdf)
     text, _ = pdf_text(pdf)
-    assert text.count(note) == 2
+    assert note not in text
     assert "second.xls" in text
     store.close()
 
@@ -163,3 +163,22 @@ def test_unified_table_columns_and_keyword_counts(tmp_path):
     for label in ["文档路径", "文档名", "文档类型", "解析情况", "关键词", "匹配次数"]:
         assert label in text
     store.close()
+
+
+def test_paths_merge_per_page_and_repeat_on_continuation(tmp_path):
+    pdf = tmp_path / "merged.pdf"
+    writer = PDFWriter(pdf)
+    rows = [["shared-directory", f"file-{i:03d}.txt", ".txt", "完成", "无", "0"] for i in range(90)]
+    rows += [["other-directory", "other.txt", ".txt", "失败", "NA", "—"],
+             ["shared-directory", "last.txt", ".txt", "完成", "无", "0"]]
+    writer.result_table(rows)
+    writer.save()
+    with fitz.open(pdf) as doc:
+        assert len(doc) > 1
+        for page in list(doc)[:-1]:
+            assert page.get_text().count("shared-directory") == 1
+        text = "".join(page.get_text() for page in doc)
+        assert text.count("shared-directory") == len(doc) + 1
+        for i in range(90):
+            assert text.count(f"file-{i:03d}.txt") == 1
+        assert "other.txt" in text and "last.txt" in text

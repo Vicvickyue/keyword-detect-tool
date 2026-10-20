@@ -1,3 +1,3 @@
 """Local Windows keyword inspection and PDF reporting."""
 
-__version__ = "1.3.1"
+__version__ = "1.3.2"

@@ -158,15 +158,14 @@ class PDFWriter:
         self.canvas.save()
 
     def result_table(self, rows):
-        """Bound batches, repeat headers, and split unusually tall rows without truncation."""
+        """Merge consecutive paths per page; repeat paths and headers on continuation."""
         headers = ["文档路径", "文档名", "文档类型", "解析情况", "关键词", "匹配次数"]
         widths = [self.usable - 510, 115, 80, 140, 120, 55]
-        batch = []
-        def draw(rows):
+
+        def make_table(batch):
             data = [[Paragraph(escape(safe_text(value)), self.styles["small"]) for value in row]
-                    for row in [headers, *rows]]
-            table = Table(data, colWidths=widths, repeatRows=1, splitByRow=1, splitInRow=1)
-            table.setStyle(TableStyle([
+                    for row in [headers, *batch]]
+            commands = [
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E5F1F3")),
                 ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F5F7FA")]),
@@ -175,34 +174,65 @@ class PDFWriter:
                 ("RIGHTPADDING", (0, 0), (-1, -1), 5),
                 ("TOPPADDING", (0, 0), (-1, -1), 5),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ]))
-            queue = [table]
-            while queue:
-                item = queue.pop(0)
-                available = self.y - 52
-                _, height = item.wrap(self.usable, available)
-                if height <= available:
-                    item.drawOn(self.canvas, self.left, self.y - height)
-                    self.y -= height + 7
-                else:
-                    parts = item.split(self.usable, available)
-                    if parts:
-                        first, *rest = parts
-                        _, height = first.wrap(self.usable, available)
-                        first.drawOn(self.canvas, self.left, self.y - height)
-                        queue = rest + queue
-                    else:
-                        if available >= self.height - 111:
-                            raise ValueError("文件清单存在无法分页的内容。")
-                        queue.insert(0, item)
-                    self.new_page()
+            ]
+            start = 0
+            while start < len(batch):
+                end = start + 1
+                while end < len(batch) and batch[end][0] == batch[start][0]:
+                    end += 1
+                if end - start > 1:
+                    commands.extend([
+                        ("SPAN", (0, start + 1), (0, end)),
+                        ("BACKGROUND", (0, start + 1), (0, end), colors.HexColor("#F5F7FA")),
+                        ("BOX", (0, start + 1), (0, end), .3, colors.HexColor("#D5E0E7")),
+                    ])
+                start = end
+            table = Table(data, colWidths=widths, repeatRows=1, splitByRow=1, splitInRow=1)
+            table.setStyle(TableStyle(commands))
+            return table
+
+        def draw(table):
+            _, height = table.wrap(self.usable, self.y - 52)
+            table.drawOn(self.canvas, self.left, self.y - height)
+            self.y -= height + 7
+
+        batch = []
         for row in rows:
-            batch.append(row)
-            if len(batch) == 200:
-                draw(batch)
-                batch = []
+            while True:
+                candidate = make_table([*batch, row])
+                _, height = candidate.wrap(self.usable, self.y - 52)
+                if height <= self.y - 52:
+                    batch.append(row)
+                    break
+                if batch:
+                    draw(make_table(batch))
+                    batch = []
+                    self.new_page()
+                    continue
+                if self.y < self.height - 58:
+                    self.new_page()
+                    continue
+                # A single exceptionally tall row still preserves all text across pages.
+                queue = [candidate]
+                while queue:
+                    item = queue.pop(0)
+                    available = self.y - 52
+                    _, height = item.wrap(self.usable, available)
+                    if height <= available:
+                        draw(item)
+                    else:
+                        parts = item.split(self.usable, available)
+                        if not parts:
+                            raise ValueError("文件清单存在无法分页的内容。")
+                        first, *rest = parts
+                        draw(first)
+                        queue = rest + queue
+                        self.new_page()
+                if self.y < self.height - 58:
+                    self.new_page()
+                break
         if batch:
-            draw(batch)
+            draw(make_table(batch))
 
 
 def file_label(file):
@@ -257,7 +287,7 @@ def write_pdf(store, target):
 def result_rows(store):
     for file in store.files():
         status = file["status"]
-        parsing = status + ("：" + file["error"] if file["error"] else "")
+        parsing = status + ("：" + file["error"] if file["error"] and status != "完成" else "")
         prefix = [document_directory(file), short_name(file), file_type(file), parsing]
         hits = list(store.hits(file["id"]))
         if hits:
@@ -265,11 +295,11 @@ def result_rows(store):
                 count = str(hit["total"]) + ("（已观察）" if status != "完成" else "")
                 yield [*prefix, f"{RULE_NAMES[hit['rule']]}：{hit['keyword']}", count]
         elif status == "完成":
-            yield [*prefix, "未匹配", "0"]
+            yield [*prefix, "无", "0"]
         elif status in {"已展开", "分卷附件"}:
             yield [*prefix, "不适用", "—"]
         else:
-            yield [*prefix, "未能确定", "—"]
+            yield [*prefix, "NA", "—"]
 
 
 def write_details(report, store, summary):
