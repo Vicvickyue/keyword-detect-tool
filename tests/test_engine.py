@@ -338,3 +338,48 @@ def test_xls_offset_rows_and_columns_without_header(tmp_path):
     evidence = store.evidence(1, "foup", "APE10264")[0]
     assert (evidence["column"], evidence["row"]) == ("D", 6)
     store.close()
+
+
+@pytest.mark.parametrize("suffix", [".log", ".csv"])
+def test_late_gb18030_text_validated_before_counting(tmp_path, suffix):
+    path = tmp_path / ("late" + suffix)
+    prefix = "APE10264\n" * 16 + "plain\n" * 50000
+    path.write_bytes((prefix + "安装 APE10264\n").encode("gb18030"))
+    store = scan(tmp_path, path)
+    assert hits(store)["foup", "APE10264"] == 17
+    assert next(store.files())["status"] == "完成"
+    assert store.summary()["incomplete"] == 0
+    assert len(store.evidence(1, "foup", "APE10264")) == 5
+    store.close()
+
+
+def test_invalid_bom_text_not_silently_reinterpreted(tmp_path):
+    path = tmp_path / "broken.log"
+    path.write_bytes(b"\xef\xbb\xbf" + b"APE10264\n" * 40000 + b"\xb0")
+    store = scan(tmp_path, path)
+    row = next(store.files())
+    assert row["status"] == "失败" and row["total"] == 0
+    assert "编码校验失败" in row["error"]
+    store.close()
+
+
+def test_encoding_validation_can_cancel(tmp_path):
+    from lotfinder.readers import encoding_for
+    from lotfinder.models import Cancelled
+    path = tmp_path / "large.log"
+    path.write_bytes(b"A" * 1000000)
+    calls = 0
+    def check():
+        nonlocal calls
+        calls += 1
+        if calls == 3:
+            raise Cancelled("cancelled")
+    with pytest.raises(Cancelled):
+        encoding_for(path, check)
+
+
+def test_utf8_multibyte_crosses_validation_chunk(tmp_path):
+    from lotfinder.readers import encoding_for
+    path = tmp_path / "boundary.log"
+    path.write_bytes(b"a" * (256 * 1024 - 1) + "安 APE10264".encode("utf-8"))
+    assert encoding_for(path) == "utf-8"

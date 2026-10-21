@@ -66,7 +66,7 @@ def detect(path: Path, name: str):
     return "unsupported"
 
 
-def encoding_for(path):
+def sample_encoding(path):
     with path.open("rb") as f:
         sample = f.read(256 * 1024)
     if sample.startswith(codecs.BOM_UTF8):
@@ -90,8 +90,33 @@ def encoding_for(path):
     return guess.encoding
 
 
+def encoding_for(path, check=lambda: None):
+    """Validate an encoding over the entire file before any matches are recorded."""
+    check()
+    preferred = sample_encoding(path)
+    with path.open("rb") as stream:
+        head = stream.read(4)
+    # A BOM or UTF-16 layout is authoritative: do not reinterpret corrupt Unicode as GBK.
+    fixed = head.startswith((codecs.BOM_UTF8, codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)) or preferred.startswith("utf-16")
+    candidates = [preferred] if fixed else list(dict.fromkeys([preferred, "utf-8", "gb18030"]))
+    for encoding in candidates:
+        decoder = codecs.getincrementaldecoder(encoding)(errors="strict")
+        try:
+            with path.open("rb") as stream:
+                while True:
+                    check()
+                    chunk = stream.read(256 * 1024)
+                    decoder.decode(chunk, final=not chunk)
+                    if not chunk:
+                        return encoding
+        except UnicodeDecodeError:
+            continue
+    raise ValueError("文本编码校验失败：文件可能包含混合编码、损坏或不完整字符。"
+                     "请从原软件重新导出，或确认原始编码后转换为 UTF-8 再检索；未忽略无法解码的内容。")
+
+
 def text_records(path, check):
-    encoding = encoding_for(path)
+    encoding = encoding_for(path, check)
     with path.open("r", encoding=encoding, errors="strict", newline="") as stream:
         number = 0
         while True:
@@ -150,7 +175,7 @@ def table_records(rows, sheet, header_row, check):
 
 def csv_records(path, name, header_row, check):
     csv.field_size_limit(8 * 1024**2)
-    with path.open("r", encoding=encoding_for(path), errors="strict", newline="") as stream:
+    with path.open("r", encoding=encoding_for(path, check), errors="strict", newline="") as stream:
         sample = stream.read(65536)
         stream.seek(0)
         try:

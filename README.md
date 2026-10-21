@@ -6,7 +6,7 @@ Windows 本地离线工具：检索文本、表格和多层压缩包，输出带
 
 **[下载 KeywordReportTool-Windows-x64.zip（约 58 MiB）](https://github.com/Vicvickyue/keyword-detect-tool/raw/refs/heads/main/downloads/KeywordReportTool-Windows-x64.zip)**
 
-已编译的 v1.3.2 便携包包含 EXE、运行依赖、三个 Excel 词库模板、示例和使用说明，支持 SQLite `.db3` 检索，默认生成汇总表格 PDF，匹配明细可选。完整解压后双击 `KeywordReportTool.exe`；不需要运行源码或构建脚本。请勿单独移动 EXE，必须保留同目录的 `_internal` 文件夹。
+已编译的 v1.3.3 便携包包含 EXE、运行依赖、三个 Excel 词库模板、示例和使用说明，支持 SQLite `.db3` 检索，默认生成汇总表格 PDF，匹配明细可选。完整解压后双击 `KeywordReportTool.exe`；不需要运行源码或构建脚本。请勿单独移动 EXE，必须保留同目录的 `_internal` 文件夹。
 
 如果直接下载链接未打开，可进入 [下载目录](downloads/README.md)，点击 ZIP 文件，再选择 GitHub 的 **Download raw file**。私有仓库需要先登录有权限的 GitHub 账号。[SHA-256 校验文件](downloads/KeywordReportTool-Windows-x64.zip.sha256)
 
@@ -160,3 +160,5 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 测试覆盖六类规则、完整 ID 后缀、完整计数/五处明细、中文编码、CSV 多行及邻列、隐藏工作表、公式缺缓存、XLS/ODS、五层混合压缩、深度/展开限制、路径穿越、取消和 PDF 中文长内容/编号。
 PDF 采用嵌入中文字体的可搜索文本，不生成图片型报告。第三方许可见 `THIRD_PARTY_NOTICES.md`。
+
+文本和 CSV 在扫描计数前按块校验整个文件的编码，避免开头为 ASCII、后段出现 GB18030 中文时误判 UTF-8。此步骤会增加一次文件读取，支持取消；不丢弃无法解码的字节。无法严格解码或带 BOM 的文件损坏时明确报告失败。编码自动识别无法保证所有混合编码文件正确解释。
