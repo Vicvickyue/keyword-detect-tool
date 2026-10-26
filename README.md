@@ -10,6 +10,12 @@ Windows 本地离线工具：检索文本、表格和多层压缩包，输出带
 
 如果直接下载链接未打开，可进入 [下载目录](downloads/README.md)，点击 ZIP 文件，再选择 GitHub 的 **Download raw file**。私有仓库需要先登录有权限的 GitHub 账号。[SHA-256 校验文件](downloads/KeywordReportTool-Windows-x64.zip.sha256)
 
+## 图文操作 SOP
+
+[下载中文 Word 操作 SOP（适用 v1.3.3）](https://github.com/Vicvickyue/keyword-detect-tool/raw/refs/heads/main/docs/KeywordReportTool-SOP-v1.3.3.docx)
+
+共 6 页、7 张界面与报告图片，包含词库准备、扫描操作、高级设置、报告解读及常见异常处理，可用 Word 编辑。
+
 ## 快速使用
 
 1. 解压整个 `KeywordReportTool-Windows-x64.zip`，双击 `KeywordReportTool.exe`。请保留同目录的 `_internal` 文件夹。
