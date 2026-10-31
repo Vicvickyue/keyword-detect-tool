@@ -160,7 +160,7 @@ class PDFWriter:
     def result_table(self, rows):
         """Merge consecutive paths per page; repeat paths and headers on continuation."""
         headers = ["文档路径", "文档名", "文档类型", "解析情况", "关键词", "匹配次数"]
-        widths = [self.usable - 510, 115, 80, 140, 120, 55]
+        widths = [180, self.usable - 575, 80, 140, 120, 55]
 
         def make_table(batch):
             data = [[Paragraph(escape(safe_text(value)), self.styles["small"]) for value in row]
