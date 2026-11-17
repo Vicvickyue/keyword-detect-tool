@@ -1,5 +1,8 @@
 # 文件关键词检索工具
 
+本开发分支新增独立的 **文件类型检查工具**：勾选 13 种目标后缀，递归检查文件夹与多层压缩包，输出 PDF、CSV、JSONL。
+[使用说明](TYPECHECK.md) · [下载独立 Windows 便携包](https://github.com/Vicvickyue/keyword-detect-tool/raw/refs/heads/feature/file-type-checker/downloads/FileTypeCheckTool-Windows-x64.zip)。原关键词工具仍使用下方入口。
+
 Windows 本地离线工具：检索文本、表格和多层压缩包，输出带中文内容、定位信息和匹配次数的 PDF 报告。无需联网、无需安装 Python 或 Microsoft Excel。
 
 ## 下载 Windows 便携版
