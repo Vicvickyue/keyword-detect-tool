@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path, PureWindowsPath
 from threading import Event
 
-from lotfinder.archives import ArchiveReader
+from .archives import ArchiveReader
 from lotfinder.models import Cancelled, LimitExceeded
 from . import TYPES, VERSION
 
@@ -154,7 +154,7 @@ class Scanner:
                     if size > self.config.max_file_bytes:
                         child.update(status='受限', reason='嵌套压缩文件超过解包大小限制。')
                         continue
-                    target = Path(temp) / f'member-{index}.bin'
+                    target = Path(temp) / (f'member-{index}' + ''.join(PureWindowsPath(name).suffixes))
                     try:
                         self.reader.extract(path, name, target)
                         if size >= 0 and target.stat().st_size != size:
@@ -175,7 +175,7 @@ class Scanner:
             row.update(status='受限', reason=str(exc))
             raise
         except Exception as exc:
-            row.update(status='失败', reason=str(exc))
+            row.update(status='部分检查', reason=str(exc))
 
 
 def execute(config, cancel=None, progress=None):

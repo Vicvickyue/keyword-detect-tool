@@ -1,4 +1,4 @@
-VERSION = '1.0.0'
+VERSION = '1.0.1'
 
 TYPES = {
     '.src': '光刻光源文件', '.mdl': '曝光后日志',

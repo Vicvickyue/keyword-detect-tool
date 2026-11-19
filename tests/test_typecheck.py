@@ -127,3 +127,57 @@ def test_gui_selection(tmp_path):
     assert w.sources.count() == 1 and w.config().selected == {'.gds'}
     w.select_all(True); assert len(w.config().selected) == 13
     w.close()
+
+
+def test_native_archives_without_7zip(tmp_path, monkeypatch):
+    from lotfinder.archives import ArchiveReader
+    monkeypatch.setattr(ArchiveReader, 'run', lambda *args: pytest.fail('7-Zip called'))
+    for suffix, mode in [('.tar', 'w'), ('.tgz', 'w:gz'), ('.tar.gz', 'w:gz')]:
+        source = tmp_path / ('中文' + suffix)
+        nested = io.BytesIO()
+        with zipfile.ZipFile(nested, 'w') as z:
+            z.writestr('中文/版图.gds', b'data')
+        with tarfile.open(source, mode) as tar:
+            info = tarfile.TarInfo('内部.zip'); info.size = len(nested.getvalue())
+            tar.addfile(info, io.BytesIO(nested.getvalue()))
+        result = scan(tmp_path, source)
+        assert result['matched'] == 1 and result['state'] == '完成'
+
+
+def test_tar_missing_end_markers_and_truncated_payload(tmp_path):
+    source = tmp_path / 'sample.tar'
+    with tarfile.open(source, 'w') as tar:
+        info = tarfile.TarInfo('chip.gds'); info.size = 600
+        tar.addfile(info, io.BytesIO(b'x' * 600))
+    original = source.read_bytes()
+    # Complete header and padded payload, but no final zero blocks.
+    source.write_bytes(original[:1536])
+    result = scan(tmp_path, source)
+    assert result['matched'] == 1 and result['state'] == '完成'
+    # Name remains observable; missing member data must not report success.
+    source.write_bytes(original[:700])
+    result = scan(tmp_path, source)
+    assert result['matched'] == 1 and result['state'] != '完成'
+    assert result['rows'][0]['status'] == '部分检查'
+
+
+def test_native_tar_links_and_duplicate_names(tmp_path):
+    source = tmp_path / 'links.tar'
+    with tarfile.open(source, 'w') as tar:
+        link = tarfile.TarInfo('link.gds'); link.type = tarfile.SYMTYPE; link.linkname = '../outside'
+        tar.addfile(link)
+        tar.addfile(tarfile.TarInfo('a.gds'))
+        tar.addfile(tarfile.TarInfo('a.gds'))
+    result = scan(tmp_path, source)
+    assert result['matched'] == 1 and result['state'] != '完成'
+
+
+def test_native_zip_extract_limit(tmp_path):
+    from typecheck.archives import ArchiveReader
+    from lotfinder.models import LimitExceeded
+    source = tmp_path / 'sample.zip'
+    with zipfile.ZipFile(source, 'w') as z:
+        z.writestr('inner.tar', b'x' * 100)
+    reader = ArchiveReader(Config([source], tmp_path / 'out', max_file_bytes=10), lambda: None)
+    with pytest.raises(LimitExceeded):
+        reader.extract(source, 'inner.tar', tmp_path / 'extracted')
